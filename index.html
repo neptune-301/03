@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포도 이미지 변환기 🍇</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-purple: #7b1fa2;
+            --light-purple: #f3e5f5;
+            --accent-purple: #ab47bc;
+            --bg-color: #f8f4f9;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-color);
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: #fff;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(123, 31, 162, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+            color: var(--primary-purple);
+            text-align: center;
+        }
+
+        p.desc {
+            color: #8e8491;
+            font-size: 14px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 10px;
+            font-size: 15px;
+            color: var(--primary-purple);
+        }
+
+        /* 드래그 앤 드롭 영역 스타일 강화 */
+        .drop-zone {
+            width: 100%;
+            padding: 40px 20px;
+            border: 2px dashed var(--accent-purple);
+            border-radius: 12px;
+            text-align: center;
+            background-color: var(--light-purple);
+            cursor: pointer;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            background-color: #e1bee7;
+            border-color: var(--primary-purple);
+        }
+
+        .drop-zone p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--primary-purple);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 15px;
+            font-family: 'Noto Sans KR', sans-serif;
+            outline-color: var(--accent-purple);
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+
+        #convertBtn {
+            background-color: var(--primary-purple);
+            color: white;
+        }
+
+        #convertBtn:hover {
+            background-color: #4a0072;
+        }
+
+        #resetBtn {
+            background-color: #e0e0e0;
+            color: #616161;
+        }
+
+        #resetBtn:hover {
+            background-color: #bdbdbd;
+        }
+
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        #file-list-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--primary-purple);
+            font-weight: 500;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 15px;
+            color: var(--primary-purple);
+            text-align: center;
+            font-weight: bold;
+            min-height: 22px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>로컬 이미지 변환기 🍇</h1>
+    <p class="desc">EXIF 삭제 · JPG 변환 · 용량 압축 · 일괄 다운로드</p>
+
+    <div class="form-group">
+        <label>1. 이미지 파일 선택 (드래그 & 드롭 가능)</label>
+        <div class="drop-zone" id="dropZone">
+            <p id="dropZoneText">이곳에 파일을 끌어다 놓거나 클릭하여 선택하세요</p>
+            <div id="file-list-info"></div>
+        </div>
+        <input type="file" id="imageInput" accept="image/*" multiple>
+    </div>
+
+    <div class="form-group">
+        <label for="fileNameInput">2. 저장할 파일명 일괄 지정</label>
+        <input type="text" id="fileNameInput" placeholder="파일명을 입력하세요" value="포도">
+    </div>
+
+    <div class="form-group">
+        <label for="sizeLimit">3. 최대 용량 제한 (화질 최적화)</label>
+        <select id="sizeLimit">
+            <option value="0">제한 없음 (최고 화질)</option>
+            <option value="1048576">1MB 이하로 압축</option>
+            <option value="2097152" selected>2MB 이하로 압축</option>
+            <option value="5242880">5MB 이하로 압축</option>
+        </select>
+    </div>
+
+    <div class="button-group">
+        <button id="convertBtn">변환 및 다운로드</button>
+        <button id="resetBtn">초기화</button>
+    </div>
+    
+    <div id="status"></div>
+</div>
+
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const dropZone = document.getElementById('dropZone');
+    const fileInfo = document.getElementById('file-list-info');
+    const statusDiv = document.getElementById('status');
+    const fileNameInput = document.getElementById('fileNameInput');
+    const sizeLimit = document.getElementById('sizeLimit');
+    const convertBtn = document.getElementById('convertBtn');
+
+    // --- 파일 관리 로직 ---
+    let selectedFiles = [];
+
+    // 초기화 버튼 기능
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        selectedFiles = [];
+        imageInput.value = '';
+        fileNameInput.value = '포도';
+        sizeLimit.selectedIndex = 2; // 2MB 기본값
+        fileInfo.innerText = '';
+        statusDiv.innerText = '';
+        document.getElementById('dropZoneText').innerText = '이곳에 파일을 끌어다 놓거나 클릭하여 선택하세요';
+    });
+
+    // 드래그 앤 드롭 처리
+    dropZone.addEventListener('click', () => imageInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    imageInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
+
+    function handleFiles(files) {
+        selectedFiles = Array.from(files);
+        if (selectedFiles.length > 0) {
+            fileInfo.innerText = `선택된 파일: ${selectedFiles.length}개`;
+            document.getElementById('dropZoneText').innerText = '파일이 준비되었습니다!';
+        }
+    }
+
+    // --- 변환 및 압축 로직 (기존 로직 유지) ---
+    convertBtn.addEventListener('click', async () => {
+        const baseName = fileNameInput.value.trim() || 'image';
+        const limitValue = parseInt(sizeLimit.value);
+
+        if (selectedFiles.length === 0) {
+            alert('변환할 이미지를 선택해주세요!');
+            return;
+        }
+
+        convertBtn.disabled = true;
+        let successCount = 0;
+
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            statusDiv.innerText = `🍇 [${i + 1}/${selectedFiles.length}] 처리 중...`;
+            
+            try {
+                const img = await loadImage(file);
+                const blob = await processImage(img, limitValue);
+                
+                const paddedIndex = String(i + 1).padStart(2, '0');
+                const newFileName = `${baseName}_${paddedIndex}.jpg`;
+                
+                downloadBlob(blob, newFileName);
+                successCount++;
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        statusDiv.innerText = `✅ 완료! ${successCount}개의 보랏빛 파일 탄생!`;
+        convertBtn.disabled = false;
+    });
+
+    function loadImage(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function processImage(img, maxBytes) {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+
+        if (maxBytes === 0) {
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
+        }
+
+        let minQuality = 0.1;
+        let maxQuality = 1.0;
+        let bestBlob = null;
+
+        for (let step = 0; step < 7; step++) {
+            let testQuality = (minQuality + maxQuality) / 2;
+            let testBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', testQuality));
+            
+            if (testBlob.size <= maxBytes) {
+                bestBlob = testBlob;
+                minQuality = testQuality;
+            } else {
+                maxQuality = testQuality;
+            }
+        }
+        return bestBlob || await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.1));
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+
+</body>
+</html>
