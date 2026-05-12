@@ -189,7 +189,16 @@
         </select>
     </div>
 
+    <div class="form-group">
+        <label>4. 이미지 추가 효과</label>
+        <label style="display: flex; align-items: center; font-weight: normal; font-size: 15px; color: #333; cursor: pointer;">
+            <input type="checkbox" id="flipHorizontal" style="width: auto; margin-right: 10px; transform: scale(1.2);">
+            일괄 좌우 반전 적용
+        </label>
+    </div>
+
     <div class="button-group">
+        
         <button id="convertBtn">변환 및 다운로드</button>
         <button id="resetBtn">초기화</button>
     </div>
@@ -205,43 +214,38 @@
     const fileNameInput = document.getElementById('fileNameInput');
     const sizeLimit = document.getElementById('sizeLimit');
     const convertBtn = document.getElementById('convertBtn');
+    const flipHorizontal = document.getElementById('flipHorizontal'); // 추가됨
 
     // --- 파일 관리 로직 ---
     let selectedFiles = [];
-
     // 초기화 버튼 기능
     document.getElementById('resetBtn').addEventListener('click', () => {
         selectedFiles = [];
         imageInput.value = '';
         fileNameInput.value = '포도';
         sizeLimit.selectedIndex = 2; // 2MB 기본값
+        flipHorizontal.checked = false; // 추가됨
         fileInfo.innerText = '';
         statusDiv.innerText = '';
         document.getElementById('dropZoneText').innerText = '이곳에 파일을 끌어다 놓거나 클릭하여 선택하세요';
     });
-
     // 드래그 앤 드롭 처리
     dropZone.addEventListener('click', () => imageInput.click());
-
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropZone.classList.add('drag-over');
     });
-
     dropZone.addEventListener('dragleave', () => {
         dropZone.classList.remove('drag-over');
     });
-
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
         handleFiles(e.dataTransfer.files);
     });
-
     imageInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
     });
-
     function handleFiles(files) {
         selectedFiles = Array.from(files);
         if (selectedFiles.length > 0) {
@@ -254,12 +258,14 @@
     convertBtn.addEventListener('click', async () => {
         const baseName = fileNameInput.value.trim() || 'image';
         const limitValue = parseInt(sizeLimit.value);
+        const isFlipped = flipHorizontal.checked; // 추가됨
 
         if (selectedFiles.length === 0) {
             alert('변환할 이미지를 선택해주세요!');
             return;
         }
 
+ 
         convertBtn.disabled = true;
         let successCount = 0;
 
@@ -268,22 +274,24 @@
             statusDiv.innerText = `🍇 [${i + 1}/${selectedFiles.length}] 처리 중...`;
             
             try {
+    
                 const img = await loadImage(file);
-                const blob = await processImage(img, limitValue);
+                const blob = await processImage(img, limitValue, isFlipped); // 추가됨
                 
                 const paddedIndex = String(i + 1).padStart(2, '0');
                 const newFileName = `${baseName}_${paddedIndex}.jpg`;
+      
                 
                 downloadBlob(blob, newFileName);
                 successCount++;
-                
                 await new Promise(resolve => setTimeout(resolve, 300));
             } catch (err) {
                 console.error(err);
             }
         }
 
-        statusDiv.innerText = `✅ 완료! ${successCount}개의 보랏빛 파일 탄생!`;
+        statusDiv.innerText = `✅ 완료!
+${successCount}개의 보랏빛 파일 탄생!`;
         convertBtn.disabled = false;
     });
 
@@ -293,6 +301,7 @@
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => resolve(img);
+     
                 img.onerror = reject;
                 img.src = e.target.result;
             };
@@ -301,7 +310,7 @@
         });
     }
 
-    async function processImage(img, maxBytes) {
+    async function processImage(img, maxBytes, isFlipped) { // 추가됨
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -309,8 +318,14 @@
         
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
 
+        // 추가된 로직: 좌우 반전
+        if (isFlipped) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        ctx.drawImage(img, 0, 0);
         if (maxBytes === 0) {
             return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1.0));
         }
@@ -318,11 +333,9 @@
         let minQuality = 0.1;
         let maxQuality = 1.0;
         let bestBlob = null;
-
         for (let step = 0; step < 7; step++) {
             let testQuality = (minQuality + maxQuality) / 2;
             let testBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', testQuality));
-            
             if (testBlob.size <= maxBytes) {
                 bestBlob = testBlob;
                 minQuality = testQuality;
@@ -330,7 +343,8 @@
                 maxQuality = testQuality;
             }
         }
-        return bestBlob || await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.1));
+        return bestBlob ||
+        await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.1));
     }
 
     function downloadBlob(blob, filename) {
